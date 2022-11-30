@@ -1,6 +1,6 @@
 {
   "name": "@aloelabs/block-gobbler",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "oclif example Hello World CLI",
   "author": "Matt Evenson @mattevenson",
   "bin": {
@@ -67,7 +67,8 @@
     "posttest": "yarn lint",
     "prepack": "yarn build && oclif manifest && oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
-    "version": "oclif readme && git add README.md"
+    "version": "oclif readme && git add README.md",
+    "setup": "yarn build && npm install ."
   },
   "engines": {
     "node": ">=12.0.0"

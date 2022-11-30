@@ -2,25 +2,15 @@ import {Command, Flags} from '@oclif/core'
 import Web3 from 'web3'
 import {contractFlags, intervalFlags, rpcFlags} from '../utils/flags'
 import * as fs from 'node:fs'
-import {AsyncBatchRequest, getBlockNumberBatches} from '../utils/batch'
 import Heap from 'heap-js'
-import pLimit from 'p-limit'
-
-const callResultToArray = (result: any) => {
-  let resultArray
-  if (typeof result === 'object') {
-    resultArray = []
-    for (let i = 0; i.toString() in result; i++) {
-      resultArray.push(result[i.toString()])
-    }
-  } else {
-    resultArray = [result]
-  }
-
-  return resultArray
-}
 
 type GetterResult = [number, any[]]
+
+async function sleep(millis: number) {
+  return new Promise((resolve, _) => {
+    setTimeout(resolve, millis)
+  })
+}
 
 export default class Getters extends Command {
   static description = 'describe the command here'
@@ -29,8 +19,10 @@ export default class Getters extends Command {
     ...intervalFlags,
     ...rpcFlags,
     ...contractFlags,
-    batchSize: Flags.integer({default: 10}),
-    concurrency: Flags.integer({default: 100}),
+    maxAttempts: Flags.integer({default: 3}),
+    maxTimeout: Flags.integer({default: 10_000}), // millis
+    baseBackoffInterval: Flags.integer({default: 500}), // millis
+    requestsPerSecond: Flags.integer({default: 100}),
     getter: Flags.string({char: 'g', required: true}), // multicall
   }
 
@@ -48,46 +40,46 @@ export default class Getters extends Command {
     const endBlock =
       flags.endBlock ?? (await web3.eth.getBlockNumber()) - flags.confirmations
 
-    const blockNumberBatches = getBlockNumberBatches(
-      flags.startBlock,
-      endBlock,
-      flags.batchSize,
-    )
+    const maxAttempts = flags.maxAttempts
+    const maxTimeout = flags.maxTimeout
+    const baseBackoffInterval = flags.baseBackoffInterval
+    const nominalRPS = flags.requestsPerSecond
 
-    const concurrencyLimit = pLimit(flags.concurrency)
-
-    const batchPromises: Promise<unknown>[] = []
-
-    // TODO: figure out multicall
+    const promises: Promise<unknown>[] = []
 
     const minHeap = new Heap<GetterResult>()
-
     let lastEmittedBlock = flags.startBlock - 1
 
-    batchPromises.push(
-      ...blockNumberBatches.map(blockNumbers =>
-        concurrencyLimit(async () => {
-          const batch = new AsyncBatchRequest(web3)
-          for (const block of blockNumbers) {
-            batch.add(contract.methods[flags.getter]().call.request, block)
-          }
+    for (let block = flags.startBlock; block < endBlock; block += 1) {
+      const fetch = async () => {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            const res = await contract.methods[flags.getter]().call(block)
+            const resWithMetadata = [block, Array.isArray(res) ? res : [res]] as GetterResult
 
-          const results = (await batch.execute()) as [number, any][]
-          const data = results.map(
-            ([blockNumber, result]) =>
-              [blockNumber, callResultToArray(result)] as GetterResult,
-          )
-          minHeap.push(...data)
-          // only keep batches in promises
-          while (minHeap.peek()?.[0] == lastEmittedBlock + 1) {
-            // TODO: should it emit the full record or not?
-            console.log(JSON.stringify(minHeap.pop()))
-            lastEmittedBlock++
-          }
-        }),
-      ),
-    )
+            minHeap.push(resWithMetadata)
+            while (minHeap.peek()?.[0] === lastEmittedBlock + 1) {
+              console.log(JSON.stringify(minHeap.pop()))
+              lastEmittedBlock++
+            }
 
-    await Promise.all(batchPromises)
+            break
+          } catch {
+            const backoff = Math.min(baseBackoffInterval * (2 ** attempt), maxTimeout)
+            const jitter = backoff * 0.2 * (Math.random() - 0.5)
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(backoff + jitter)
+          }
+        }
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(1000 / nominalRPS)
+
+      promises.push(fetch())
+    }
+
+    await Promise.all(promises)
   }
 }

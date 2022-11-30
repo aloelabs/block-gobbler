@@ -35,6 +35,8 @@ export default class Getters extends Command {
   }
 
   public async run(): Promise<void> {
+    console.log('THIS IS A TEST\n\n\n')
+
     const {flags} = await this.parse(Getters)
 
     const web3 = new Web3(flags.rpc)
@@ -54,7 +56,7 @@ export default class Getters extends Command {
       flags.batchSize,
     )
 
-    const concurrencyLimit = pLimit(flags.concurrency)
+    // const concurrencyLimit = pLimit(flags.concurrency)
 
     const batchPromises: Promise<unknown>[] = []
 
@@ -65,14 +67,15 @@ export default class Getters extends Command {
     let lastEmittedBlock = flags.startBlock - 1
 
     batchPromises.push(
-      ...blockNumberBatches.map(blockNumbers =>
-        concurrencyLimit(async () => {
-          const batch = new AsyncBatchRequest(web3)
-          for (const block of blockNumbers) {
-            batch.add(contract.methods[flags.getter]().call.request, block)
-          }
+      ...blockNumberBatches.map(async blockNumbers => {
+        const batch = new AsyncBatchRequest(web3)
+        for (const block of blockNumbers) {
+          batch.add(contract.methods[flags.getter]().call, block)
+        }
 
+        try {
           const results = (await batch.execute()) as [number, any][]
+
           const data = results.map(
             ([blockNumber, result]) =>
               [blockNumber, callResultToArray(result)] as GetterResult,
@@ -84,8 +87,11 @@ export default class Getters extends Command {
             console.log(JSON.stringify(minHeap.pop()))
             lastEmittedBlock++
           }
-        }),
-      ),
+        } catch (error) {
+          console.error(error)
+          console.log('OOPS THERE WAS AN ERROR')
+        }
+      }),
     )
 
     await Promise.all(batchPromises)

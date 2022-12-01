@@ -12,6 +12,20 @@ async function sleep(millis: number) {
   })
 }
 
+const callResultToArray = (result: any) => {
+  let resultArray
+  if (typeof result === 'object') {
+    resultArray = []
+    for (let i = 0; i.toString() in result; i++) {
+      resultArray.push(result[i.toString()])
+    }
+  } else {
+    resultArray = [result]
+  }
+
+  return resultArray
+}
+
 export default class Getters extends Command {
   static description = 'describe the command here'
 
@@ -40,10 +54,10 @@ export default class Getters extends Command {
     const endBlock =
       flags.endBlock ?? (await web3.eth.getBlockNumber()) - flags.confirmations
 
-    const maxAttempts = flags.maxAttempts
-    const maxTimeout = flags.maxTimeout
-    const baseBackoffInterval = flags.baseBackoffInterval
-    const nominalRPS = flags.requestsPerSecond
+    const maxAttempts = 3 // millis, flags.maxAttempts
+    const maxTimeout = 10_000 // millis, flags.maxTimeout
+    const baseBackoffInterval = 500 // millis, flags.baseBackoffInterval
+    const nominalRPS = 100 // flags.requestsPerSecond
 
     const promises: Promise<unknown>[] = []
 
@@ -56,7 +70,7 @@ export default class Getters extends Command {
           try {
             // eslint-disable-next-line no-await-in-loop
             const res = await contract.methods[flags.getter]().call(block)
-            const resWithMetadata = [block, Array.isArray(res) ? res : [res]] as GetterResult
+            const resWithMetadata = [block, callResultToArray(res)] as GetterResult
 
             minHeap.push(resWithMetadata)
             while (minHeap.peek()?.[0] === lastEmittedBlock + 1) {

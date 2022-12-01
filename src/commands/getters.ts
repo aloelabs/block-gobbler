@@ -33,10 +33,8 @@ export default class Getters extends Command {
     ...intervalFlags,
     ...rpcFlags,
     ...contractFlags,
-    maxAttempts: Flags.integer({default: 3}),
-    maxTimeout: Flags.integer({default: 10_000}), // millis
-    baseBackoffInterval: Flags.integer({default: 500}), // millis
-    requestsPerSecond: Flags.integer({default: 100}),
+    batchSize: Flags.integer({default: 10}),
+    concurrency: Flags.integer({default: 100}),
     getter: Flags.string({char: 'g', required: true}), // multicall
   }
 
@@ -54,10 +52,10 @@ export default class Getters extends Command {
     const endBlock =
       flags.endBlock ?? (await web3.eth.getBlockNumber()) - flags.confirmations
 
-    const maxAttempts = flags.maxAttempts
-    const maxTimeout = flags.maxTimeout
-    const baseBackoffInterval = flags.baseBackoffInterval
-    const nominalRPS = flags.requestsPerSecond
+    const maxAttempts = 3 // millis, flags.maxAttempts
+    const maxTimeout = 10_000 // millis, flags.maxTimeout
+    const baseBackoffInterval = 500 // millis, flags.baseBackoffInterval
+    const nominalRPS = 100 // flags.requestsPerSecond
 
     const promises: Promise<unknown>[] = []
 

@@ -54,10 +54,10 @@ export default class Getters extends Command {
     const endBlock =
       flags.endBlock ?? (await web3.eth.getBlockNumber()) - flags.confirmations
 
-    const maxAttempts = 3 // millis, flags.maxAttempts
-    const maxTimeout = 10_000 // millis, flags.maxTimeout
-    const baseBackoffInterval = 500 // millis, flags.baseBackoffInterval
-    const nominalRPS = 100 // flags.requestsPerSecond
+    const maxAttempts = flags.maxAttempts
+    const maxTimeout = flags.maxTimeout
+    const baseBackoffInterval = flags.baseBackoffInterval
+    const nominalRPS = flags.requestsPerSecond
 
     const promises: Promise<unknown>[] = []
 
